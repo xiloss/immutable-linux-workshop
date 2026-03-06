@@ -1,0 +1,19 @@
+apiVersion: build.kairos.io/v1alpha2
+kind: OSArtifact
+metadata:
+  name: demo-kairos
+spec:
+  imageName: "quay.io/kairos/core-ubuntu-24-lts:latest"
+  iso: true
+  cloudConfig: |
+    #cloud-config
+    install:
+      device: "auto"
+      reboot: true
+      poweroff: false
+      auto: true
+    users:
+      - name: "kairos"
+        passwd: "kairos"
+        groups:
+          - admin

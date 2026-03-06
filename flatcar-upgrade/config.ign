@@ -1,0 +1,44 @@
+{
+   "ignition": { "version": "3.3.0" },
+   "passwd": {
+      "users": [
+         {
+         "name": "core",
+         "sshAuthorizedKeys": [
+            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAO5nEatDfsM5X2QGaC1mvjsUtsrRbrrmKngKME1MqiS fabrizio.sgura@va"
+         ]
+         }
+      ]
+   },
+   "storage": {
+      "files": [
+         {
+         "path": "/etc/hostname",
+         "mode": 420,
+         "overwrite": true,
+         "contents": { "source": "data:,flatcar-demo" }
+         },
+         {
+         "path": "/etc/rancher/k3s/config.yaml",
+         "mode": 420,
+         "overwrite": true,
+         "contents": {
+            "source": "data:,write-kubeconfig-mode%3A%20%220644%22%0Adisable%3A%0A%20%20-%20traefik%0A"
+         }
+         }
+      ]
+   },
+   "systemd": {
+      "units": [
+         {
+         "name": "k3s-install.service",
+         "enabled": true,
+         "contents": "[Unit]\nDescription=Install K3s\nWants=network-online.target\nAfter=network-online.target\nConditionPathExists=!/etc/systemd/system/k3s.service\n\n[Service]\nType=oneshot\nRemainAfterExit=yes\nRestart=on-failure\nRestartSec=15\nExecStart=/usr/bin/bash -lc 'for i in $(seq 1 20); do curl -sfL https://get.k3s.io && break; sleep 10; done | INSTALL_K3S_EXEC=\"server\" sh -'\n\n[Install]\nWantedBy=multi-user.target"
+         },
+         {
+         "name": "sshd.service",
+         "enabled": true
+         }
+      ]
+   }
+}
