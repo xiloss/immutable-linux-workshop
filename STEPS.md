@@ -326,19 +326,52 @@ qemu-system-x86_64 \
 ```
 
 Choose interactive installation and follow the steps.
-Once completed, boot the machine with
+Once completed, boot the machine with the following
 
 ```bash
-qemu-system-x86_64 \
+sudo qemu-system-x86_64 \
   -enable-kvm \
   -cpu host \
   -smp 4 \
   -m 4096 \
   -boot order=d \
-  -drive file=kairos-disk.qcow2,if=virtio
+  -drive file=demo-kairos-disk.qcow2,if=virtio \
+```
+
+For bridge network, follow the next example
+
+```bash
+sudo qemu-system-x86_64 \
+  -enable-kvm \
+  -cpu host \
+  -smp 4 \
+  -m 4096 \
+  -boot order=d \
+  -drive file=demo-kairos-disk.qcow2,if=virtio \
+  -netdev bridge,id=user.0,br=virbr0 \
+  -device e1000e,netdev=user.0,id=net0,mac=a6:68:13:1d:e4:2d
 ```
 
 and play with Kairos and the already installed k3s version 1.32.9 for this case.
+
+To perform a Kairos upgrade, we can run the next commands:
+
+```bash
+# List available releases
+sudo kairos-agent upgrade list-releases
+# Select one and upgrade, as the next example
+sudo kairos-agent upgrade --source oci:quay.io/kairos/fedora:40-standard-amd64-generic-v3.7.2-k3s-v1.35.0-k3s3
+```
+
+Once the upgrade is completed, the new kubernetes binary should be the version 1.35.0.
+Running
+
+```bash
+# List available releases
+sudo kairos-agent upgrade list-releases
+```
+
+the current version should be the installed one.
 
 ### Kairos Use Cases  
 - **Custom Kubernetes nodes:** Build pre-configured k3s-enabled images.  
