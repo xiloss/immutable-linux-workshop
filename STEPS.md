@@ -14,13 +14,53 @@ Flatcar Container Linux is an immutable, container-optimized OS (a successor to 
 
 ### Steps to Set Up Flatcar VM
 
-1. **Download the Flatcar QEMU image and launch script.** Create a working directory and use `wget` to fetch the official Flatcar QEMU launch script and disk image (Stable channel):
-    ```bash
-    mkdir flatcar && cd flatcar
-    wget https://stable.release.flatcar-linux.net/amd64-usr/current/flatcar_production_qemu.sh
-    wget https://stable.release.flatcar-linux.net/amd64-usr/current/flatcar_production_qemu_image.img
-    chmod +x flatcar_production_qemu.sh
-    ```  
+1. **Download the Flatcar QEMU image and launch script.** 
+   
+   _Case for updated installation only:_
+
+   Create a working directory and use `wget` to fetch the official Flatcar QEMU launch script and disk image (Stable channel):
+
+   ```bash
+   # Using a temporary local folder
+   mkdir flatcar && cd flatcar
+
+   # getting the latest stable QEMU script
+   wget https://stable.release.flatcar-linux.net/amd64-usr/current/flatcar_production_qemu.sh
+
+   # getting the latest stable QEMU image
+   wget https://stable.release.flatcar-linux.net/amd64-usr/current/flatcar_production_qemu_image.img
+
+   # making script executable
+   chmod +x flatcar_production_qemu.sh
+   ```
+
+   _Case for demonstration of upgrade_
+
+   Create a working directory and use `wget` to fetch a previous version and the official Flatcar QEMU launch script and disk image from the Stable channel:
+
+   ```bash
+   # Using a temporary local folder
+   mkdir flatcar-upgradable && cd flatcar-upgradable
+
+   # We start with old version of flatcar:
+   OLD_VER="4230.2.4"
+
+   # getting the OLD_VER QEMU script
+   wget "https://stable.release.flatcar-linux.net/amd64-usr/${OLD_VER}/flatcar_production_qemu.sh"
+
+   # Downloading the QEMU image for the that version
+   wget "https://stable.release.flatcar-linux.net/amd64-usr/${OLD_VER}/flatcar_production_qemu_image.img.bz2"
+
+   # uncompressing
+   bunzip2 flatcar_production_qemu_image.img.bz2
+
+   # Get the update payload for the CURRENT stable version
+   STABLE_CURRENT=$(curl -s https://flatcar.cdn.cncf.io/stable/amd64-usr/4459.2.3/version.txt | grep FLATCAR_VERSION= | cut -d= -f2)
+
+   # Downloading the current stable release for later upgrade
+   wget "https://update.release.flatcar-linux.net/amd64-usr/${STABLE_CURRENT}/flatcar_production_update.gz"
+   ```
+
 
 2. **Create a minimal Ignition config (`config.ign`).** Ignition is Flatcar’s boot-time provisioning tool. We’ll use it to perform a basic configuration on first boot. For demo purposes, our Ignition config will set a custom hostname. Create a file **`config.ign`** with the following content:  
 
@@ -40,13 +80,71 @@ Flatcar Container Linux is an immutable, container-optimized OS (a successor to 
     EOF
     ```  
 
-3. **Launch the Flatcar VM with QEMU.** Use the provided script to start the VM, including our Ignition file:  
+   **A more advanced config.ign ignition file**
+
+   ```json
+   cat <<EOF >config.ign
+   {
+      "ignition": { "version": "3.3.0" },
+      "passwd": {
+         "users": [
+            {
+               "name": "core",
+               "sshAuthorizedKeys": [
+                  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAO5nEatDfsM5X2QGaC1mvjsUtsrRbrrmKngKME1MqiS fabrizio.sgura@va"
+               ]
+            }
+         ]
+      },
+      "storage": {
+         "files": [
+            {
+               "path": "/etc/hostname",
+               "mode": 420,
+               "overwrite": true,
+               "contents": { "source": "data:,flatcar-demo" }
+            },
+            {
+               "path": "/etc/rancher/k3s/config.yaml",
+               "mode": 420,
+               "overwrite": true,
+               "contents": {
+                  "source": "data:,write-kubeconfig-mode%3A%20%220644%22%0Adisable%3A%0A%20%20-%20traefik%0A"
+               }
+            }
+         ]
+      },
+      "systemd": {
+         "units": [
+            {
+               "name": "k3s-install.service",
+               "enabled": true,
+               "contents": "[Unit]\nDescription=Install K3s\nWants=network-online.target\nAfter=network-online.target\nConditionPathExists=!/etc/systemd/system/k3s.service\n\n[Service]\nType=oneshot\nRemainAfterExit=yes\nRestart=on-failure\nRestartSec=15\nExecStart=/usr/bin/bash -lc 'for i in $(seq 1 20); do curl -sfL https://get.k3s.io && break; sleep 10; done | INSTALL_K3S_EXEC=\"server\" sh -'\n\n[Install]\nWantedBy=multi-user.target"
+            },
+            {
+               "name": "sshd.service",
+               "enabled": true
+            }
+         ]
+      }
+   }
+   EOF
+   ```
+
+3. **Launch the Flatcar VM with QEMU.**
+
+   Use the provided script to start the VM, including our Ignition file:  
+
    ```bash
    ./flatcar_production_qemu.sh -i config.ign -- -nographic
    ```  
+
    The script uses user-mode networking by default, forwarding SSH port 22 in the VM to host port 2222.  
 
 4. **Access the Flatcar VM via SSH.**  
+
+   This will work only when using a NAT configuration for QEMU, for bridge we have to specify the IP address
+
    ```bash
    ssh -p 2222 core@localhost
    ```  
@@ -56,7 +154,91 @@ Flatcar Container Linux is an immutable, container-optimized OS (a successor to 
    ```  
    Expected output: `flatcar-demo`.
 
-5. **(Optional) Bridged Networking:** For LAN access, set up a TAP interface and bridge it with a host NIC, then use `-netdev tap` and `-device virtio-net-pci` in QEMU. NAT suffices for most demos.
+5. **(Optional) Bridged Networking:**
+
+   ```bash
+   # In terminal
+   sudo ./flatcar_production_qemu.sh -i config.ign -- -nographic -netdev bridge,id=user.0,br=virbr0 -device e1000e,netdev=user.0,id=net0,mac=a6:68:13:1d:e4:2d
+
+   # In QEMU window
+   sudo ./flatcar_production_qemu.sh -i config.ign -- -netdev bridge,id=user.0,br=virbr0 -device e1000e,netdev=user.0,id=net0,mac=a6:68:13:1d:e4:2d
+   ```  
+
+6. **Commands and useful options**
+
+   To show the current /usr A B partitions
+
+   ```bash
+   sudo cgpt find -t flatcar-usr
+   ```
+
+   NOTE: In case an ERROR on 0 to 2048, that's because ```cgpt``` command cannot read the partition table for inspecting the /usr, it will not cause issues.
+
+   Show the whole disk partitioning
+
+   ```bash
+   sudo cgpt show -v /dev/sda
+   ```
+
+   Verify the current partition table
+
+   ```bash
+   sudo gdisk -l /dev/sda
+   ```
+
+   Check the current flatcar release
+
+   ```bash
+   cat /etc/os-release
+   ```
+
+   Check the current update engine status
+
+   ```bash
+	update_engine_client --status
+   ```
+   
+
+7. **Updates and Releases**
+
+Flatcar updates and releases, with changelogs and security fixes are available at ```https://www.flatcar.org/releases```
+
+
+8. **The release upgrade case**
+
+In case of going for the demo with upgrade, after running a previous release of FlatCar, it is necessary to proceed with the airgap case, to save time and use the pre-downloaded image.
+First we copy the image on the running machine, discovering it's IP address.
+
+   ```bash
+   scp -P 2222 ./flatcar_production_update.gz core@localhost:~/
+   ```
+
+or in case of using a bridge network configuration, discover IP and use the related correct endpoint.
+
+There is also another requirement for the QEMU image, we need to download the additional extension file
+
+   ```bash
+   wget https://update.release.flatcar-linux.net/amd64-usr/4459.2.3/oem-qemu.gz
+   ```
+
+This file also need to be copied to the flatcar node, using scp.
+
+Then to perform the update, inside the VM, run the local update targeting the new version:
+
+   ```bash
+   sudo flatcar-update \
+     --to-version "${STABLE_VERSION:=4459.2.3}" \
+     --to-payload /home/core/flatcar_production_update.gz \
+     --extension /home/core/oem-qemu.gz
+   ```
+
+A status can be checked during the phase of upgrade.
+
+   ```bash
+   journalctl -u update-engine -f
+   ```
+
+At this point the upgrade is completed.
 
 ## 2. Building a Kairos OS Image with Kairos **osbuilder**  
 
@@ -69,8 +251,8 @@ Flatcar Container Linux is an immutable, container-optimized OS (a successor to 
 ### Steps to Build and Test a Kairos Image
 
 1. **Prepare `config.yaml`:**
-   ```yaml
-   mkdir -p config && cd kairos
+   ```bash
+   mkdir -p kairos && cd kairos
    cat <<EOF >config.yaml
    apiVersion: build.kairos.io/v1alpha2
    kind: OSArtifact
@@ -81,14 +263,16 @@ Flatcar Container Linux is an immutable, container-optimized OS (a successor to 
      iso: true
      cloudConfig: |
        #cloud-config
-       users:
-       - name: "kairos"
-         passwd: "kairos"
        install:
-       device: "auto"
-       reboot: true
-       poweroff: false
-       auto: true
+         device: "auto"
+         reboot: true
+         poweroff: false
+         auto: true
+       users:
+         - name: "kairos"
+           passwd: "kairos"
+           groups:
+             - admin
    EOF
    ```  
 
@@ -138,7 +322,7 @@ qemu-system-x86_64 \
   -m 4096 \
   -boot order=d \
   -drive file=kairos-fedora-40-standard-amd64-generic-v3.5.4-k3sv1.32.9+k3s1.iso,media=cdrom \
-  -drive file=kairos-disk.qcow2,if=virtio
+  -drive file=demo-kairos-disk.qcow2,if=virtio
 ```
 
 Choose interactive installation and follow the steps.

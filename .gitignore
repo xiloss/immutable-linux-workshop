@@ -1,0 +1,7 @@
+flatcar-upgradable/*
+flatcar-upgrade/*
+flatcar/*
+kairos/*
+*/*.img
+*/*.bz2
+*/*.iso
