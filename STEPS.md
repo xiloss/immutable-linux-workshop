@@ -1,6 +1,7 @@
-# Running Flatcar Linux on QEMU and Building a Kairos OS Image (Ubuntu 24.04 Host)
+# Running Flatcar Linux and Kairos on QEMU
 
 ## Introduction  
+
 This guide demonstrates two tasks on an Ubuntu 24.04 host (24 CPU cores, 128 GB RAM) using KVM virtualization: (1) Running Flatcar Container Linux in a QEMU/KVM virtual machine with an Ignition config, and (2) Using Kairos’s containerized **osbuilder** to build a custom immutable OS image. Both sections include step-by-step instructions, configuration files, and explanations.
 
 ## 1. Flatcar Container Linux on QEMU/KVM  
@@ -165,6 +166,18 @@ Flatcar Container Linux is an immutable, container-optimized OS (a successor to 
    ```  
 
 6. **Commands and useful options**
+
+   Check the current root device
+
+   ```bash
+   rootdev -s /usr
+   ```
+
+   To set the boot partition
+
+   ```bash
+   sudo cgpt prioritize /dev/sda4
+   ```
 
    To show the current /usr A B partitions
 
